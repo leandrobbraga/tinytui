@@ -50,7 +50,14 @@ impl Rectangle {
     }
 
     pub fn split_horizontally(self) -> (Rectangle, Rectangle) {
-        let width = self.width / 2;
+        self.split_horizontally_at(0.5)
+    }
+
+    pub fn split_horizontally_at(self, percentage: f32) -> (Rectangle, Rectangle) {
+        assert!(percentage > 0.0 && percentage < 1.0);
+
+        let left_width = (self.width as f32 * percentage) as u32;
+        let right_width = self.width - left_width;
         // Horizontal split without gaps        Vertical split without gaps
         //        +-----++-----+                      +------------+
         //        |     ||     |                      |            |
@@ -72,37 +79,43 @@ impl Rectangle {
         let left = Rectangle {
             x: self.x,
             y: self.y,
-            width: width - gap,
+            width: left_width - gap,
             height: self.height,
         };
         let right = Rectangle {
-            x: self.x + width + gap,
+            x: self.x + left_width + gap,
             y: self.y,
-            width: (self.width - width - gap),
+            width: (right_width - gap),
             height: self.height,
         };
 
         (left, right)
     }
-
     pub fn split_vertically(self) -> (Rectangle, Rectangle) {
-        let height = self.height / 2;
+        self.split_vertically_at(0.5)
+    }
+    pub fn split_vertically_at(self, percentage: f32) -> (Rectangle, Rectangle) {
+        assert!(percentage > 0.0 && percentage < 1.0);
+
+        let top_height = (self.height as f32 * percentage) as u32;
+        let bottom_height = self.height - top_height;
 
         let top = Rectangle {
             x: self.x,
             y: self.y,
             width: self.width,
-            height,
+            height: top_height,
         };
         let bottom = Rectangle {
             x: self.x,
-            y: self.y + height,
+            y: self.y + top_height,
             width: self.width,
-            height: (self.height - height),
+            height: bottom_height,
         };
 
         (top, bottom)
     }
+
 
     pub fn text(
         self,

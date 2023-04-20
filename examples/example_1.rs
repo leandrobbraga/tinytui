@@ -5,6 +5,7 @@ fn main() {
 
     let screen = terminal.area();
     let (left, right) = screen.split_horizontally();
+    let (left_top, left_bottom) = left.split_vertically_at(0.7);
     let (top, bottom) = right.split_vertically();
     let (bottom_left, bottom_right) = bottom.split_horizontally();
     let (bottom_right_top, bottom_right_bottom) = bottom_right.split_vertically();
@@ -37,7 +38,7 @@ fn main() {
         HorizontalAlignment::Center,
     );
 
-    let table = left.table(
+    let table = left_bottom.table(
         vec![
             vec![
                 "Hello World".to_string(),
@@ -55,6 +56,7 @@ fn main() {
         HorizontalAlignment::Center,
     );
 
+    left_top.render(&mut terminal);
     text_1.render(&mut terminal);
     text_2.render(&mut terminal);
     item_list.render(&mut terminal);
