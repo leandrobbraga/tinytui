@@ -253,6 +253,11 @@ impl Widget for ItemList {
     fn render(&self, terminal: &mut Terminal) {
         self.area.render(terminal);
 
+        // Fast path, there is nothing to render
+        if self.items.is_empty() {
+            return;
+        }
+
         let y = match self.vertical_alignment {
             VerticalAlignment::Top => self.area.y + 1, // +1 for the border
             VerticalAlignment::Bottom => {
@@ -266,12 +271,12 @@ impl Widget for ItemList {
             HorizontalAlignment::Left => self.area.x + 1, // +1 for the border
             HorizontalAlignment::Right => {
                 self.area.x + self.area.width
-                    - self.items.iter().map(|item| item.len()).max().unwrap()
+                    - self.items.iter().map(|item| item.len()).max().unwrap_or(0)
                     - 1 // -1 for the border
             }
             HorizontalAlignment::Center => {
                 self.area.x + self.area.width / 2
-                    - self.items.iter().map(|item| item.len()).max().unwrap() / 2
+                    - self.items.iter().map(|item| item.len()).max().unwrap_or(0) / 2
             }
         };
 
@@ -320,14 +325,21 @@ impl Widget for Table {
     fn render(&self, terminal: &mut Terminal) {
         self.area.render(terminal);
 
+        // Fast path, there is nothing to render
+        if self.items.is_empty() {
+            return;
+        }
+
         let max_item_size = self
             .items
             .iter()
-            .map(|row| row.iter().map(|item| item.len()).max().unwrap())
+            .map(|row| row.iter().map(|item| item.len()).max().unwrap_or(0))
             .max()
-            .unwrap();
-        let max_row_size = self.items.iter().map(|row| row.len()).max().unwrap();
+            .unwrap_or(0);
 
+        let max_row_size = self.items.iter().map(|row| row.len()).max().unwrap_or(0);
+
+        // TODO: Can we avoid this allocation?
         let mut column_lengths = vec![0; max_row_size];
         for row in self.items.iter() {
             for (i, item) in row.iter().enumerate() {
