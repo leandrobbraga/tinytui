@@ -2,6 +2,7 @@ pub trait Widget {
     fn render(&self, terminal: &mut Terminal);
 }
 
+// TODO: Get the actual terminal width and height
 pub struct Terminal {
     buffer: Vec<u8>,
     width: usize,
@@ -18,29 +19,27 @@ impl Terminal {
     }
 
     pub fn render(&self) {
-        for y in 0..self.height {
-            for x in 0..self.width {
-                print!("{}", self.buffer[y * self.width + x] as char);
-            }
-            println!();
+        for i in (0..self.buffer.len()).step_by(self.width) {
+            let line = std::str::from_utf8(&self.buffer[i..i + self.width]).unwrap();
+            println!("{line}");
         }
     }
 
     pub fn area(&self) -> Rectangle {
-        Rectangle::new(0, 0, self.width as u32, self.height as u32)
+        Rectangle::new(0, 0, self.width, self.height)
     }
 }
 
 #[derive(Debug)]
 pub struct Rectangle {
-    x: u32,
-    y: u32,
-    width: u32,
-    height: u32,
+    x: usize,
+    y: usize,
+    width: usize,
+    height: usize,
 }
 
 impl Rectangle {
-    fn new(x: u32, y: u32, width: u32, height: u32) -> Rectangle {
+    fn new(x: usize, y: usize, width: usize, height: usize) -> Rectangle {
         Rectangle {
             x,
             y,
@@ -56,7 +55,7 @@ impl Rectangle {
     pub fn split_horizontally_at(self, percentage: f32) -> (Rectangle, Rectangle) {
         assert!(percentage > 0.0 && percentage < 1.0);
 
-        let left_width = (self.width as f32 * percentage) as u32;
+        let left_width = (self.width as f32 * percentage) as usize;
         let right_width = self.width - left_width;
         // Horizontal split without gaps        Vertical split without gaps
         //        +-----++-----+                      +------------+
@@ -97,7 +96,7 @@ impl Rectangle {
     pub fn split_vertically_at(self, percentage: f32) -> (Rectangle, Rectangle) {
         assert!(percentage > 0.0 && percentage < 1.0);
 
-        let top_height = (self.height as f32 * percentage) as u32;
+        let top_height = (self.height as f32 * percentage) as usize;
         let bottom_height = self.height - top_height;
 
         let top = Rectangle {
@@ -115,7 +114,6 @@ impl Rectangle {
 
         (top, bottom)
     }
-
 
     pub fn text(
         self,
@@ -147,16 +145,17 @@ impl Rectangle {
 
 impl Widget for Rectangle {
     fn render(&self, terminal: &mut Terminal) {
+        // We iterate in this order to help with cache locality
         for y in self.y..self.y + self.height {
             for x in self.x..self.x + self.width {
                 if y == self.y || y == self.y + self.height - 1 {
                     if x == self.x || x == self.x + self.width - 1 {
-                        terminal.buffer[(y * terminal.width as u32 + x) as usize] = b'+';
+                        terminal.buffer[y * terminal.width + x] = b'+';
                     } else {
-                        terminal.buffer[(y * terminal.width as u32 + x) as usize] = b'-';
+                        terminal.buffer[y * terminal.width + x] = b'-';
                     }
                 } else if x == self.x || x == self.x + self.width - 1 {
-                    terminal.buffer[(y * terminal.width as u32 + x) as usize] = b'|';
+                    terminal.buffer[y * terminal.width + x] = b'|';
                 } else {
                     continue;
                 }
@@ -191,7 +190,7 @@ impl Text {
         horizontal_alignment: HorizontalAlignment,
         area: Rectangle,
     ) -> Text {
-        assert!((text.len() as u32) < area.width - 2); // -2 for the border
+        assert!(text.len() < area.width - 2); // -2 for the border
         Text {
             text,
             vertical_alignment,
@@ -204,27 +203,22 @@ impl Widget for Text {
     fn render(&self, terminal: &mut Terminal) {
         self.area.render(terminal);
 
-        let x;
-        let y;
+        let y = match self.vertical_alignment {
+            VerticalAlignment::Top => self.area.y + 1, // +1 for the border
+            VerticalAlignment::Bottom => self.area.y + self.area.height - 1 - 1, // -1 for the border
+            VerticalAlignment::Center => self.area.y + self.area.height / 2,
+        };
 
-        match self.vertical_alignment {
-            VerticalAlignment::Top => y = self.area.y + 1, // +1 for the border
-            VerticalAlignment::Bottom => y = self.area.y + self.area.height - 1 - 1, // -1 for the border
-            VerticalAlignment::Center => y = self.area.y + self.area.height / 2,
-        }
-
-        match self.horizontal_alignment {
-            HorizontalAlignment::Left => x = self.area.x + 1, // +1 for the border
+        let x = match self.horizontal_alignment {
+            HorizontalAlignment::Left => self.area.x + 1, // +1 for the border
             HorizontalAlignment::Right => {
-                x = self.area.x + self.area.width - self.text.len() as u32 - 1 // -1 for the border
+                self.area.x + self.area.width - self.text.len() - 1 // -1 for the border
             }
-            HorizontalAlignment::Center => {
-                x = self.area.x + self.area.width / 2 - self.text.len() as u32 / 2
-            }
-        }
+            HorizontalAlignment::Center => self.area.x + self.area.width / 2 - self.text.len() / 2,
+        };
 
         for (i, c) in self.text.chars().enumerate() {
-            terminal.buffer[(y * terminal.width as u32 + x + i as u32) as usize] = c as u8;
+            terminal.buffer[y * terminal.width + x + i] = c as u8;
         }
     }
 }
@@ -243,8 +237,8 @@ impl ItemList {
         horizontal_alignment: HorizontalAlignment,
         area: Rectangle,
     ) -> ItemList {
-        assert!((items.len() as u32) < area.height - 2); // -2 for the border
-        assert!(items.iter().map(|item| item.len()).max() < Some(area.width as usize - 2)); // -2 for the border
+        assert!(items.len() < area.height - 2); // -2 for the border
+        assert!(items.iter().map(|item| item.len()).max() < Some(area.width - 2)); // -2 for the border
 
         ItemList {
             items,
@@ -259,37 +253,31 @@ impl Widget for ItemList {
     fn render(&self, terminal: &mut Terminal) {
         self.area.render(terminal);
 
-        let x;
-        let y;
-
-        match self.vertical_alignment {
-            VerticalAlignment::Top => y = self.area.y + 1, // +1 for the border
+        let y = match self.vertical_alignment {
+            VerticalAlignment::Top => self.area.y + 1, // +1 for the border
             VerticalAlignment::Bottom => {
                 // -1 for the border
-                y = self.area.y + self.area.height - self.items.len() as u32 - 1
+                self.area.y + self.area.height - self.items.len() - 1
             }
-            VerticalAlignment::Center => {
-                y = self.area.y + self.area.height / 2 - self.items.len() as u32 / 2
-            }
-        }
+            VerticalAlignment::Center => self.area.y + self.area.height / 2 - self.items.len() / 2,
+        };
 
-        match self.horizontal_alignment {
-            HorizontalAlignment::Left => x = self.area.x + 1, // +1 for the border
+        let x = match self.horizontal_alignment {
+            HorizontalAlignment::Left => self.area.x + 1, // +1 for the border
             HorizontalAlignment::Right => {
-                x = self.area.x + self.area.width
-                    - self.items.iter().map(|item| item.len()).max().unwrap() as u32
+                self.area.x + self.area.width
+                    - self.items.iter().map(|item| item.len()).max().unwrap()
                     - 1 // -1 for the border
             }
             HorizontalAlignment::Center => {
-                x = self.area.x + self.area.width / 2
-                    - self.items.iter().map(|item| item.len()).max().unwrap() as u32 / 2
+                self.area.x + self.area.width / 2
+                    - self.items.iter().map(|item| item.len()).max().unwrap() / 2
             }
-        }
+        };
 
         for (i, item) in self.items.iter().enumerate() {
             for (j, c) in item.chars().enumerate() {
-                terminal.buffer[((y + i as u32) * terminal.width as u32 + x + j as u32) as usize] =
-                    c as u8;
+                terminal.buffer[(y + i) * terminal.width + x + j] = c as u8;
             }
         }
     }
@@ -316,8 +304,8 @@ impl Table {
             .unwrap();
         let max_row_size = items.iter().map(|row| row.len()).max().unwrap();
 
-        assert!((items.len() as u32) < area.height - 2); // -2 for the border
-        assert!((max_item_size * max_row_size) < area.width as usize - 2); // -2 for the border
+        assert!((items.len()) < area.height - 2); // -2 for the border
+        assert!((max_item_size * max_row_size) < area.width - 2); // -2 for the border
 
         Table {
             items,
@@ -331,9 +319,6 @@ impl Table {
 impl Widget for Table {
     fn render(&self, terminal: &mut Terminal) {
         self.area.render(terminal);
-
-        let x;
-        let y;
 
         let max_item_size = self
             .items
@@ -352,42 +337,39 @@ impl Widget for Table {
             }
         }
 
-        match self.vertical_alignment {
-            VerticalAlignment::Top => y = self.area.y + 1, // +1 for the border
+        let y = match self.vertical_alignment {
+            VerticalAlignment::Top => self.area.y + 1, // +1 for the border
             VerticalAlignment::Bottom => {
                 // -1 for the border
-                y = self.area.y + self.area.height - self.items.len() as u32 - 1
+                self.area.y + self.area.height - self.items.len() - 1
             }
-            VerticalAlignment::Center => {
-                y = self.area.y + self.area.height / 2 - self.items.len() as u32 / 2
-            }
-        }
+            VerticalAlignment::Center => self.area.y + self.area.height / 2 - self.items.len() / 2,
+        };
 
-        match self.horizontal_alignment {
-            HorizontalAlignment::Left => x = self.area.x + 1, // +1 for the border
+        let x = match self.horizontal_alignment {
+            HorizontalAlignment::Left => self.area.x + 1, // +1 for the border
             HorizontalAlignment::Right => {
-                x = self.area.x + self.area.width - (max_item_size * max_row_size) as u32 - 1
                 // -1 for the border
+                self.area.x + self.area.width - max_item_size * max_row_size - 1
             }
             HorizontalAlignment::Center => {
-                x = self.area.x + self.area.width / 2 - (max_item_size * max_row_size) as u32 / 2
+                self.area.x + self.area.width / 2 - max_item_size * max_row_size / 2
             }
-        }
-
+        };
 
         for (row_index, row) in self.items.iter().enumerate() {
             for (column_index, item) in row.iter().enumerate() {
                 for (k, c) in item.chars().enumerate() {
                     // Go to the correct line in the buffer
-                    terminal.buffer[((y + row_index as u32) * terminal.width as u32 
+                    terminal.buffer[(y + row_index) * terminal.width
                         // Go to the start of the table
-                        + x 
+                        + x
                         // Go to the start of the table column 
-                        + (column_lengths.iter().take(column_index).map(|length| *length as u32).sum::<u32>())
+                        + (column_lengths.iter().take(column_index).sum::<usize>())
                         // Add spacing between table columns
-                        + column_index as u32 
+                        + column_index
                         // Go to the character position                         
-                        + k as u32) as usize] = c as u8; 
+                        + k] = c as u8;
                 }
             }
         }
