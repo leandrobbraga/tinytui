@@ -1,7 +1,7 @@
-use tinytui::{HorizontalAlignment, Terminal, VerticalAlignment, Widget};
+use tinytui::{Color, HorizontalAlignment, Terminal, VerticalAlignment, Widget};
 
 fn main() {
-    let mut terminal = Terminal::new(100, 25);
+    let mut terminal = Terminal::try_new().unwrap();
 
     let screen = terminal.area();
     let (left, right) = screen.split_horizontally();
@@ -10,35 +10,41 @@ fn main() {
     let (bottom_left, bottom_right) = bottom.split_horizontally();
     let (bottom_right_top, bottom_right_bottom) = bottom_right.split_vertically();
 
-    let text_1 = top.text(
+    let mut text_1 = top.text(
         "Center".to_string(),
         VerticalAlignment::Center,
         HorizontalAlignment::Center,
     );
+    text_1.set_title(Some("[ Center Alignment ]".into()));
 
-    let text_2 = bottom_left.text(
+    let mut text_2 = bottom_left.text(
         "Top Left".to_string(),
         VerticalAlignment::Top,
         HorizontalAlignment::Left,
     );
+    text_2.set_title(Some("[ Top Left Alignment ]".into()));
 
-    let text_3 = bottom_right_top.text(
+    let mut text_3 = bottom_right_top.text(
         "Bottom Right".to_string(),
         VerticalAlignment::Bottom,
         HorizontalAlignment::Right,
     );
+    text_3.set_title(Some("[ Bottom Right Alignment ]".into()));
 
-    let item_list = bottom_right_bottom.item_list(
+    let mut item_list = bottom_right_bottom.item_list(
         vec![
-            "Hello, World!".to_string(),
-            "Hello, Sailor!".to_string(),
-            "Hello, Seaman!".to_string(),
+            "This item is not selected".to_string(),
+            "This item is selected".to_string(),
+            "This item is also not selected".to_string(),
         ],
         VerticalAlignment::Center,
         HorizontalAlignment::Center,
     );
+    item_list.set_title(Some("[ Item List ]".into()));
+    item_list.set_selected(Some(1));
+    item_list.set_border_color(Color::Green);
 
-    let table = left_bottom.table(
+    let mut table = left_bottom.table(
         vec![
             vec![
                 "Hello World".to_string(),
@@ -55,6 +61,7 @@ fn main() {
         VerticalAlignment::Center,
         HorizontalAlignment::Center,
     );
+    table.set_title(Some("[ Table ]".into()));
 
     left_top.render(&mut terminal);
     text_1.render(&mut terminal);
@@ -63,5 +70,7 @@ fn main() {
     text_3.render(&mut terminal);
     table.render(&mut terminal);
 
-    terminal.render();
+    terminal.draw();
+
+    std::thread::sleep(std::time::Duration::from_secs(1))
 }
